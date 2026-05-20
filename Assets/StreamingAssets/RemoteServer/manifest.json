@@ -1,0 +1,17 @@
+{
+    "version": "bootstrap",
+    "files": [
+        {
+            "path": "activity/festival_activity.json",
+            "md5": "b257283e022e9aaeb1f57f161b426314",
+            "size": 806,
+            "url": "activity/festival_activity.json"
+        },
+        {
+            "path": "lua/HotfixBattle.lua",
+            "md5": "01be1507f6be825a8edff00f2af1d6f4",
+            "size": 778,
+            "url": "lua/HotfixBattle.lua"
+        }
+    ]
+}

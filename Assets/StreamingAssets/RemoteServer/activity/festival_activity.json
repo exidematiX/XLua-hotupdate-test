@@ -1,0 +1,19 @@
+{
+    "activityId": "festival_001",
+    "title": "Lantern Festival Login",
+    "subtitle": "Server JSON controls prefab, texture, copy, rewards, and colors.",
+    "heroName": "New Hero Preview: Yun Sheng",
+    "heroDescription": "This page is rendered from downloaded JSON. Build AssetBundles from the XLua Demo menu to switch from generated fallback UI to remote prefab UI.",
+    "ctaText": "Claim Gift",
+    "backgroundColor": "#FFF2CC",
+    "accentColor": "#B42318",
+    "prefabBundle": "bundles/festivalui",
+    "prefabName": "FestivalActivityPanel",
+    "backgroundBundle": "bundles/festivaltextures",
+    "backgroundAsset": "festival_banner",
+    "rewards": [
+        { "name": "Gold", "amount": 1888 },
+        { "name": "Gem", "amount": 30 },
+        { "name": "Hero Shard", "amount": 10 }
+    ]
+}
