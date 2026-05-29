@@ -1,12 +1,12 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 using XLuaDemo;
-using XLuaDemo.ResourceUpdate;
+using Debug = UnityEngine.Debug;
 
 public static class XLuaDemoAssetBundleBuilder
 {
@@ -37,16 +37,29 @@ public static class XLuaDemoAssetBundleBuilder
 
         string prefabPath = SourceRoot + "/FestivalActivityPanel.prefab";
         CreateActivityPrefab(prefabPath);
-        AssetImporter.GetAtPath(prefabPath).assetBundleName = "bundles/festivalui";
-
-        BuildPipeline.BuildAssetBundles(
-            Path.Combine(Application.dataPath, "StreamingAssets/RemoteServer"),
-            BuildAssetBundleOptions.ChunkBasedCompression,
-            EditorUserBuildSettings.activeBuildTarget);
+        AssetDatabase.ImportAsset(prefabPath);
 
         WriteActivityConfig();
         CopyLuaHotfix();
-        WriteManifest();
+
+        string[] roots = { SourceRoot };
+        XLuaDemoAssetBundlePipeline.DependencyReport report = XLuaDemoAssetBundlePipeline.AnalyzeDependencies(roots);
+        List<XLuaDemoAssetBundlePipeline.ManualBundleOverride> overrides = new List<XLuaDemoAssetBundlePipeline.ManualBundleOverride>
+        {
+            new XLuaDemoAssetBundlePipeline.ManualBundleOverride
+            {
+                assetPath = prefabPath,
+                bundleName = "bundles/festivalui"
+            },
+            new XLuaDemoAssetBundlePipeline.ManualBundleOverride
+            {
+                assetPath = bannerPath,
+                bundleName = "bundles/festivaltextures"
+            }
+        };
+        XLuaDemoAssetBundlePipeline.BundleBuildPlan plan = XLuaDemoAssetBundlePipeline.CreateBundlePlan(report, roots, overrides, true, 512 * 1024L);
+        XLuaDemoAssetBundlePipeline.WriteDependencyReport(report, plan);
+        XLuaDemoAssetBundlePipeline.BuildIncremental(plan, RemoteRoot, System.DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
 
         AssetDatabase.Refresh();
         Debug.Log("XLua demo remote resource server generated at: " + Path.GetFullPath(RemoteRoot));
@@ -66,9 +79,34 @@ public static class XLuaDemoAssetBundleBuilder
         ServUUrlWindow.Open(PlayerPrefs.GetString(RemoteBaseUrlKey, "http://127.0.0.1:8080"));
     }
 
+    [MenuItem("XLua Demo/Start Simple HTTP CDN :8080")]
+    public static void StartSimpleHttpCdn()
+    {
+        string fullRemoteRoot = Path.GetFullPath(RemoteRoot);
+        ProcessStartInfo info = new ProcessStartInfo
+        {
+            FileName = "python",
+            Arguments = "-m http.server 8080 --directory \"" + fullRemoteRoot + "\"",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        try
+        {
+            Process.Start(info);
+            PlayerPrefs.SetString(RemoteBaseUrlKey, "http://127.0.0.1:8080");
+            PlayerPrefs.Save();
+            Debug.Log("Simple HTTP CDN started at http://127.0.0.1:8080, serving: " + fullRemoteRoot);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning("Failed to start python http.server. Install Python or use Serv-U. " + ex.Message);
+        }
+    }
+
     private static void CreateActivityPrefab(string prefabPath)
     {
-        Font font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         GameObject root = new GameObject("FestivalActivityPanel", typeof(RectTransform), typeof(Image));
         RectTransform rect = root.GetComponent<RectTransform>();
         rect.sizeDelta = new Vector2(820, 420);
@@ -120,7 +158,7 @@ public static class XLuaDemoAssetBundleBuilder
                 new RewardConfig { name = "Hero Shard", amount = 10 }
             }
         };
-
+        
         File.WriteAllText(Path.Combine(RemoteRoot, "activity/festival_activity.json"), JsonUtility.ToJson(config, true), Encoding.UTF8);
     }
 
@@ -132,43 +170,6 @@ public static class XLuaDemoAssetBundleBuilder
         {
             File.Copy(source, target, true);
         }
-    }
-
-    private static void WriteManifest()
-    {
-        List<ResourceFile> files = new List<ResourceFile>();
-        AddManifestFile(files, "activity/festival_activity.json");
-        AddManifestFile(files, "lua/HotfixBattle.lua");
-        AddManifestFile(files, "bundles/festivalui");
-        AddManifestFile(files, "bundles/festivalui.manifest");
-        AddManifestFile(files, "bundles/festivaltextures");
-        AddManifestFile(files, "bundles/festivaltextures.manifest");
-
-        ResourceManifest manifest = new ResourceManifest
-        {
-            version = System.DateTime.UtcNow.ToString("yyyyMMddHHmmss"),
-            files = files.ToArray()
-        };
-
-        File.WriteAllText(Path.Combine(RemoteRoot, "manifest.json"), JsonUtility.ToJson(manifest, true), Encoding.UTF8);
-    }
-
-    private static void AddManifestFile(List<ResourceFile> files, string relativePath)
-    {
-        string fullPath = Path.Combine(RemoteRoot, relativePath);
-        if (!File.Exists(fullPath))
-        {
-            return;
-        }
-
-        FileInfo info = new FileInfo(fullPath);
-        files.Add(new ResourceFile
-        {
-            path = relativePath,
-            md5 = CalculateMd5(fullPath),
-            size = info.Length,
-            url = relativePath
-        });
     }
 
     private static Texture2D CreateBannerTexture()
@@ -235,22 +236,6 @@ public static class XLuaDemoAssetBundleBuilder
     {
         Color color;
         return ColorUtility.TryParseHtmlString(html, out color) ? color : Color.white;
-    }
-
-    private static string CalculateMd5(string path)
-    {
-        using (MD5 md5 = MD5.Create())
-        using (FileStream stream = File.OpenRead(path))
-        {
-            byte[] hash = md5.ComputeHash(stream);
-            StringBuilder builder = new StringBuilder(hash.Length * 2);
-            for (int i = 0; i < hash.Length; i++)
-            {
-                builder.Append(hash[i].ToString("x2"));
-            }
-
-            return builder.ToString();
-        }
     }
 
     private sealed class ServUUrlWindow : EditorWindow

@@ -18,7 +18,7 @@ namespace XLuaDemo
 
         public XLuaDemoUI(Transform owner)
         {
-            font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             EnsureEventSystem();
 
             GameObject canvasGo = new GameObject("XLua Demo Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
